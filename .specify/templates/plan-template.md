@@ -31,7 +31,40 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Verify compliance with `.specify/memory/constitution.md` principles:
+
+### Code Quality & Simplicity
+- [ ] Each component has single, clear responsibility
+- [ ] No premature abstractions planned
+- [ ] Design choices favor boring, obvious solutions over clever ones
+- [ ] Implementation complexity justified if unavoidable
+
+### Testing Standards
+- [ ] Test strategy defined (unit, integration, contract)
+- [ ] Tests can be written alongside or before implementation
+- [ ] Test isolation and independence verified
+- [ ] Critical business logic test coverage planned
+
+### User Experience Consistency
+- [ ] Loading states defined for async operations >200ms
+- [ ] Error handling provides clear, actionable feedback
+- [ ] Mobile-first responsive design approach
+- [ ] Accessibility requirements (WCAG 2.1 AA) planned
+
+### Performance Requirements
+- [ ] API latency targets defined (<200ms p95 simple, <1s complex)
+- [ ] Resource constraints documented (<500MB backend, <2MB frontend bundle)
+- [ ] Monitoring and metrics strategy defined
+- [ ] Performance budgets established
+
+### Complexity Justification
+If any of the following apply, document justification:
+- New external dependencies
+- New abstraction layers
+- Performance optimizations sacrificing readability
+- Architecture changes affecting multiple modules
+
+**Format**: "We need X because Y, and simpler alternative Z was rejected because W"
 
 ## Project Structure
 
