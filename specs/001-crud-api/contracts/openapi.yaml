@@ -1,0 +1,1571 @@
+openapi: 3.0.3
+info:
+  title: AI Expense Tracker Service API
+  description: |
+    REST API for expense tracking with CRUD operations for transactions, accounts, categories, and payees.
+
+    This API provides a thin data access layer over PostgreSQL. Database triggers handle account balance
+    calculations and data integrity constraints.
+
+    **Note**: Transfer transactions are out of scope for this initial version.
+  version: 1.0.0
+  contact:
+    name: AI Expense Tracker Team
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+  - url: https://api.expense-tracker.example.com
+    description: Production server
+
+tags:
+  - name: transactions
+    description: Transaction operations (income and expense)
+  - name: accounts
+    description: Account management
+  - name: categories
+    description: Category management
+  - name: payees
+    description: Payee management
+  - name: reference
+    description: Reference data (read-only)
+
+paths:
+  # ==================== TRANSACTIONS ====================
+  /transactions:
+    get:
+      tags: [transactions]
+      summary: List transactions
+      description: |
+        List transactions with optional filtering and pagination.
+        Supports filtering by account, category, payee, type, status, and date range.
+      operationId: listTransactions
+      parameters:
+        - $ref: '#/components/parameters/AccountIdFilter'
+        - $ref: '#/components/parameters/CategoryIdFilter'
+        - $ref: '#/components/parameters/PayeeIdFilter'
+        - name: transaction_type
+          in: query
+          description: Filter by transaction type
+          schema:
+            type: string
+            enum: [income, expense]
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            type: string
+            enum: [pending, cleared, reconciled, void]
+        - name: start_date
+          in: query
+          description: Filter transactions on or after this date (ISO 8601 format)
+          schema:
+            type: string
+            format: date
+            example: "2025-01-01"
+        - name: end_date
+          in: query
+          description: Filter transactions on or before this date (ISO 8601 format)
+          schema:
+            type: string
+            format: date
+            example: "2025-01-31"
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [transactions]
+      summary: Create a transaction
+      description: Create a new transaction (income or expense only, transfers not supported)
+      operationId: createTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionCreate'
+      responses:
+        '201':
+          description: Transaction created successfully
+          headers:
+            Location:
+              description: URL of the created transaction
+              schema:
+                type: string
+                example: /transactions/123
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /transactions/{transaction_id}:
+    parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        description: Transaction ID
+        schema:
+          type: integer
+          example: 123
+
+    get:
+      tags: [transactions]
+      summary: Get a transaction by ID
+      description: Retrieve a single transaction by its ID
+      operationId: getTransaction
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags: [transactions]
+      summary: Update a transaction (full update)
+      description: Replace all fields of a transaction
+      operationId: updateTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionCreate'
+      responses:
+        '200':
+          description: Transaction updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    patch:
+      tags: [transactions]
+      summary: Update a transaction (partial update)
+      description: Update specific fields of a transaction
+      operationId: patchTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionUpdate'
+      responses:
+        '200':
+          description: Transaction updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [transactions]
+      summary: Delete a transaction
+      description: Delete a transaction by ID. Account balance will be updated automatically by database trigger.
+      operationId: deleteTransaction
+      responses:
+        '204':
+          description: Transaction deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== ACCOUNTS ====================
+  /accounts:
+    get:
+      tags: [accounts]
+      summary: List accounts
+      description: List accounts with optional filtering and pagination
+      operationId: listAccounts
+      parameters:
+        - name: account_type_id
+          in: query
+          description: Filter by account type ID
+          schema:
+            type: integer
+        - name: is_closed
+          in: query
+          description: Filter by closed status
+          schema:
+            type: boolean
+        - name: currency_code
+          in: query
+          description: Filter by currency code
+          schema:
+            type: string
+            pattern: '^[A-Z]{3}$'
+            example: USD
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [accounts]
+      summary: Create an account
+      description: Create a new financial account
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountCreate'
+      responses:
+        '201':
+          description: Account created successfully
+          headers:
+            Location:
+              description: URL of the created account
+              schema:
+                type: string
+                example: /accounts/456
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /accounts/{account_id}:
+    parameters:
+      - name: account_id
+        in: path
+        required: true
+        description: Account ID
+        schema:
+          type: integer
+          example: 456
+
+    get:
+      tags: [accounts]
+      summary: Get an account by ID
+      description: Retrieve a single account by its ID, including current balance
+      operationId: getAccount
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags: [accounts]
+      summary: Update an account (full update)
+      description: Replace all updatable fields of an account
+      operationId: updateAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountCreate'
+      responses:
+        '200':
+          description: Account updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    patch:
+      tags: [accounts]
+      summary: Update an account (partial update)
+      description: Update specific fields of an account
+      operationId: patchAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountUpdate'
+      responses:
+        '200':
+          description: Account updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [accounts]
+      summary: Delete an account
+      description: |
+        Delete an account by ID.
+        Note: Associated transactions will be cascaded deleted due to ON DELETE CASCADE constraint.
+      operationId: deleteAccount
+      responses:
+        '204':
+          description: Account deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== CATEGORIES ====================
+  /categories:
+    get:
+      tags: [categories]
+      summary: List categories
+      description: List categories with optional filtering and pagination
+      operationId: listCategories
+      parameters:
+        - name: category_type
+          in: query
+          description: Filter by category type
+          schema:
+            type: string
+            enum: [income, expense, transfer]
+        - name: category_group
+          in: query
+          description: Filter by category group
+          schema:
+            type: string
+        - name: is_active
+          in: query
+          description: Filter by active status
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [categories]
+      summary: Create a category
+      description: Create a new category
+      operationId: createCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryCreate'
+      responses:
+        '201':
+          description: Category created successfully
+          headers:
+            Location:
+              description: URL of the created category
+              schema:
+                type: string
+                example: /categories/789
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /categories/{category_id}:
+    parameters:
+      - name: category_id
+        in: path
+        required: true
+        description: Category ID
+        schema:
+          type: integer
+          example: 789
+
+    get:
+      tags: [categories]
+      summary: Get a category by ID
+      description: Retrieve a single category by its ID
+      operationId: getCategory
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags: [categories]
+      summary: Update a category (full update)
+      description: Replace all fields of a category
+      operationId: updateCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryCreate'
+      responses:
+        '200':
+          description: Category updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    patch:
+      tags: [categories]
+      summary: Update a category (partial update)
+      description: Update specific fields of a category
+      operationId: patchCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryUpdate'
+      responses:
+        '200':
+          description: Category updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [categories]
+      summary: Delete a category
+      description: |
+        Delete a category by ID.
+        Note: Transactions referencing this category will have their category_id set to NULL (ON DELETE SET NULL).
+      operationId: deleteCategory
+      responses:
+        '204':
+          description: Category deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== PAYEES ====================
+  /payees:
+    get:
+      tags: [payees]
+      summary: List payees
+      description: List payees with optional filtering and pagination
+      operationId: listPayees
+      parameters:
+        - name: is_active
+          in: query
+          description: Filter by active status
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayeeListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [payees]
+      summary: Create a payee
+      description: Create a new payee
+      operationId: createPayee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayeeCreate'
+      responses:
+        '201':
+          description: Payee created successfully
+          headers:
+            Location:
+              description: URL of the created payee
+              schema:
+                type: string
+                example: /payees/101
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayeeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /payees/{payee_id}:
+    parameters:
+      - name: payee_id
+        in: path
+        required: true
+        description: Payee ID
+        schema:
+          type: integer
+          example: 101
+
+    get:
+      tags: [payees]
+      summary: Get a payee by ID
+      description: Retrieve a single payee by its ID
+      operationId: getPayee
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayeeResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags: [payees]
+      summary: Update a payee (full update)
+      description: Replace all fields of a payee
+      operationId: updatePayee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayeeCreate'
+      responses:
+        '200':
+          description: Payee updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayeeResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    patch:
+      tags: [payees]
+      summary: Update a payee (partial update)
+      description: Update specific fields of a payee
+      operationId: patchPayee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayeeUpdate'
+      responses:
+        '200':
+          description: Payee updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayeeResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [payees]
+      summary: Delete a payee
+      description: |
+        Delete a payee by ID.
+        Note: Transactions referencing this payee will have their payee_id set to NULL (ON DELETE SET NULL).
+      operationId: deletePayee
+      responses:
+        '204':
+          description: Payee deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== REFERENCE DATA ====================
+  /account-types:
+    get:
+      tags: [reference]
+      summary: List account types
+      description: Get all account types (read-only reference data)
+      operationId: listAccountTypes
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountTypeResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /currencies:
+    get:
+      tags: [reference]
+      summary: List currencies
+      description: Get all supported currencies (read-only reference data)
+      operationId: listCurrencies
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CurrencyResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  parameters:
+    # Common filter parameters
+    AccountIdFilter:
+      name: account_id
+      in: query
+      description: Filter by account ID
+      schema:
+        type: integer
+
+    CategoryIdFilter:
+      name: category_id
+      in: query
+      description: Filter by category ID
+      schema:
+        type: integer
+
+    PayeeIdFilter:
+      name: payee_id
+      in: query
+      description: Filter by payee ID
+      schema:
+        type: integer
+
+    # Pagination parameters
+    Limit:
+      name: limit
+      in: query
+      description: Maximum number of items to return
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+
+    Offset:
+      name: offset
+      in: query
+      description: Number of items to skip
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+
+    # Sorting parameters
+    Sort:
+      name: sort
+      in: query
+      description: Field to sort by
+      schema:
+        type: string
+
+    Order:
+      name: order
+      in: query
+      description: Sort order
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+
+  schemas:
+    # ==================== TRANSACTION SCHEMAS ====================
+    TransactionCreate:
+      type: object
+      required:
+        - account_id
+        - transaction_type
+        - amount
+        - currency_code
+        - base_amount
+        - transaction_date
+      properties:
+        account_id:
+          type: integer
+          description: ID of the account this transaction belongs to
+          example: 1
+        transaction_type:
+          type: string
+          enum: [income, expense]
+          description: Type of transaction (transfer not supported in this API)
+          example: expense
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          description: Transaction amount (always positive)
+          example: 50.00
+        currency_code:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: ISO 4217 currency code
+          example: USD
+        base_amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          description: Amount in base currency (after exchange rate conversion)
+          example: 50.00
+        transaction_date:
+          type: string
+          format: date
+          description: Date of the transaction (ISO 8601)
+          example: "2025-01-15"
+        status:
+          type: string
+          enum: [pending, cleared, reconciled, void]
+          default: cleared
+          description: Transaction status
+        exchange_rate:
+          type: number
+          format: decimal
+          default: 1.000000
+          description: Exchange rate used for currency conversion
+          example: 1.000000
+        payee_id:
+          type: integer
+          nullable: true
+          description: Optional payee ID
+          example: 5
+        category_id:
+          type: integer
+          nullable: true
+          description: Optional category ID
+          example: 10
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+          description: Transaction description
+          example: "Weekly grocery shopping"
+        reference_number:
+          type: string
+          maxLength: 50
+          nullable: true
+          description: Reference or check number
+          example: "CHK-1234"
+        location:
+          type: string
+          maxLength: 255
+          nullable: true
+          description: Transaction location
+          example: "Whole Foods, Downtown"
+        notes:
+          type: string
+          nullable: true
+          description: Additional notes
+          example: "Bought organic vegetables"
+
+    TransactionUpdate:
+      type: object
+      description: Partial update schema - all fields optional
+      properties:
+        account_id:
+          type: integer
+        transaction_type:
+          type: string
+          enum: [income, expense]
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+        currency_code:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        base_amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+        transaction_date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [pending, cleared, reconciled, void]
+        exchange_rate:
+          type: number
+          format: decimal
+        payee_id:
+          type: integer
+          nullable: true
+        category_id:
+          type: integer
+          nullable: true
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+        reference_number:
+          type: string
+          maxLength: 50
+          nullable: true
+        location:
+          type: string
+          maxLength: 255
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
+    TransactionResponse:
+      type: object
+      required:
+        - transaction_id
+        - account_id
+        - transaction_type
+        - amount
+        - currency_code
+        - base_amount
+        - transaction_date
+        - status
+        - exchange_rate
+        - created_at
+        - updated_at
+      properties:
+        transaction_id:
+          type: integer
+          description: Unique transaction identifier
+          example: 123
+        account_id:
+          type: integer
+          example: 1
+        transaction_type:
+          type: string
+          enum: [income, expense, transfer]
+          example: expense
+        amount:
+          type: number
+          format: decimal
+          example: 50.00
+        currency_code:
+          type: string
+          example: USD
+        base_amount:
+          type: number
+          format: decimal
+          example: 50.00
+        transaction_date:
+          type: string
+          format: date
+          example: "2025-01-15"
+        status:
+          type: string
+          enum: [pending, cleared, reconciled, void]
+          example: cleared
+        exchange_rate:
+          type: number
+          format: decimal
+          example: 1.000000
+        payee_id:
+          type: integer
+          nullable: true
+          example: 5
+        category_id:
+          type: integer
+          nullable: true
+          example: 10
+        description:
+          type: string
+          nullable: true
+          example: "Weekly grocery shopping"
+        reference_number:
+          type: string
+          nullable: true
+          example: "CHK-1234"
+        transfer_account_id:
+          type: integer
+          nullable: true
+          description: Read-only field for transfer transactions (not supported in create/update)
+          example: null
+        location:
+          type: string
+          nullable: true
+          example: "Whole Foods, Downtown"
+        notes:
+          type: string
+          nullable: true
+          example: "Bought organic vegetables"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+
+    TransactionListResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionResponse'
+        pagination:
+          $ref: '#/components/schemas/PaginationMetadata'
+
+    # ==================== ACCOUNT SCHEMAS ====================
+    AccountCreate:
+      type: object
+      required:
+        - account_type_id
+        - account_name
+        - currency_code
+        - opening_balance
+      properties:
+        account_type_id:
+          type: integer
+          description: Reference to account type
+          example: 1
+        account_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Name of the account
+          example: "Chase Checking"
+        currency_code:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          default: USD
+          description: ISO 4217 currency code
+          example: USD
+        opening_balance:
+          type: number
+          format: decimal
+          default: 0.00
+          description: Initial balance when account was created
+          example: 1000.00
+        account_number:
+          type: string
+          maxLength: 50
+          nullable: true
+          description: Masked or partial account number
+          example: "****1234"
+        institution_name:
+          type: string
+          maxLength: 100
+          nullable: true
+          description: Financial institution name
+          example: "Chase Bank"
+        credit_limit:
+          type: number
+          format: decimal
+          nullable: true
+          description: Credit limit for credit cards
+          example: 5000.00
+        is_closed:
+          type: boolean
+          default: false
+          description: Whether the account is closed
+        notes:
+          type: string
+          nullable: true
+          description: Additional notes
+          example: "Primary checking account"
+        opening_balance_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date when opening balance was established (defaults to current date)
+          example: "2025-01-01"
+
+    AccountUpdate:
+      type: object
+      description: Partial update schema - all fields optional
+      properties:
+        account_type_id:
+          type: integer
+        account_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        currency_code:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        account_number:
+          type: string
+          maxLength: 50
+          nullable: true
+        institution_name:
+          type: string
+          maxLength: 100
+          nullable: true
+        credit_limit:
+          type: number
+          format: decimal
+          nullable: true
+        is_closed:
+          type: boolean
+        notes:
+          type: string
+          nullable: true
+
+    AccountResponse:
+      type: object
+      required:
+        - account_id
+        - account_type_id
+        - account_name
+        - currency_code
+        - opening_balance
+        - current_balance
+        - is_closed
+        - opening_balance_date
+        - created_at
+        - updated_at
+      properties:
+        account_id:
+          type: integer
+          description: Unique account identifier
+          example: 456
+        account_type_id:
+          type: integer
+          example: 1
+        account_name:
+          type: string
+          example: "Chase Checking"
+        account_number:
+          type: string
+          nullable: true
+          example: "****1234"
+        institution_name:
+          type: string
+          nullable: true
+          example: "Chase Bank"
+        currency_code:
+          type: string
+          example: USD
+        opening_balance:
+          type: number
+          format: decimal
+          description: Initial balance
+          example: 1000.00
+        current_balance:
+          type: number
+          format: decimal
+          description: Current balance (automatically maintained by database triggers)
+          example: 1250.00
+        credit_limit:
+          type: number
+          format: decimal
+          nullable: true
+          example: 5000.00
+        is_closed:
+          type: boolean
+          example: false
+        notes:
+          type: string
+          nullable: true
+          example: "Primary checking account"
+        opening_balance_date:
+          type: string
+          format: date
+          example: "2025-01-01"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+
+    AccountListResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountResponse'
+        pagination:
+          $ref: '#/components/schemas/PaginationMetadata'
+
+    # ==================== CATEGORY SCHEMAS ====================
+    CategoryCreate:
+      type: object
+      required:
+        - category_name
+        - category_type
+      properties:
+        category_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Category name
+          example: "Groceries"
+        category_type:
+          type: string
+          enum: [income, expense, transfer]
+          description: Category type
+          example: expense
+        category_group:
+          type: string
+          maxLength: 50
+          nullable: true
+          description: Category group for hierarchical organization
+          example: "Food & Dining"
+        color_code:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          nullable: true
+          description: Hex color code for UI
+          example: "#FF6B6B"
+        icon_name:
+          type: string
+          maxLength: 50
+          nullable: true
+          description: Icon identifier for UI
+          example: "shopping-cart"
+        is_active:
+          type: boolean
+          default: true
+          description: Whether the category is active
+
+    CategoryUpdate:
+      type: object
+      description: Partial update schema - all fields optional
+      properties:
+        category_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        category_type:
+          type: string
+          enum: [income, expense, transfer]
+        category_group:
+          type: string
+          maxLength: 50
+          nullable: true
+        color_code:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          nullable: true
+        icon_name:
+          type: string
+          maxLength: 50
+          nullable: true
+        is_active:
+          type: boolean
+
+    CategoryResponse:
+      type: object
+      required:
+        - category_id
+        - category_name
+        - category_type
+        - is_active
+        - created_at
+      properties:
+        category_id:
+          type: integer
+          description: Unique category identifier
+          example: 789
+        category_name:
+          type: string
+          example: "Groceries"
+        category_type:
+          type: string
+          enum: [income, expense, transfer]
+          example: expense
+        category_group:
+          type: string
+          nullable: true
+          example: "Food & Dining"
+        color_code:
+          type: string
+          nullable: true
+          example: "#FF6B6B"
+        icon_name:
+          type: string
+          nullable: true
+          example: "shopping-cart"
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-01-01T00:00:00Z"
+
+    CategoryListResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryResponse'
+        pagination:
+          $ref: '#/components/schemas/PaginationMetadata'
+
+    # ==================== PAYEE SCHEMAS ====================
+    PayeeCreate:
+      type: object
+      required:
+        - payee_name
+      properties:
+        payee_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Payee name
+          example: "Whole Foods"
+        default_category_id:
+          type: integer
+          nullable: true
+          description: Default category to auto-assign for this payee
+          example: 10
+        notes:
+          type: string
+          nullable: true
+          description: Additional notes
+          example: "Local grocery store"
+        is_active:
+          type: boolean
+          default: true
+          description: Whether the payee is active
+
+    PayeeUpdate:
+      type: object
+      description: Partial update schema - all fields optional
+      properties:
+        payee_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        default_category_id:
+          type: integer
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+
+    PayeeResponse:
+      type: object
+      required:
+        - payee_id
+        - payee_name
+        - is_active
+        - created_at
+        - updated_at
+      properties:
+        payee_id:
+          type: integer
+          description: Unique payee identifier
+          example: 101
+        payee_name:
+          type: string
+          example: "Whole Foods"
+        default_category_id:
+          type: integer
+          nullable: true
+          example: 10
+        notes:
+          type: string
+          nullable: true
+          example: "Local grocery store"
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+
+    PayeeListResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayeeResponse'
+        pagination:
+          $ref: '#/components/schemas/PaginationMetadata'
+
+    # ==================== REFERENCE DATA SCHEMAS ====================
+    AccountTypeResponse:
+      type: object
+      required:
+        - account_type_id
+        - type_name
+        - is_asset
+      properties:
+        account_type_id:
+          type: integer
+          description: Unique account type identifier
+          example: 1
+        type_name:
+          type: string
+          description: Account type name
+          example: "checking"
+        description:
+          type: string
+          nullable: true
+          description: Account type description
+          example: "Checking Account"
+        is_asset:
+          type: boolean
+          description: True for assets, false for liabilities
+          example: true
+
+    CurrencyResponse:
+      type: object
+      required:
+        - currency_code
+        - currency_name
+        - decimal_places
+        - is_active
+      properties:
+        currency_code:
+          type: string
+          description: ISO 4217 currency code
+          example: USD
+        currency_name:
+          type: string
+          description: Currency name
+          example: "US Dollar"
+        currency_symbol:
+          type: string
+          nullable: true
+          description: Currency symbol
+          example: "$"
+        decimal_places:
+          type: integer
+          description: Number of decimal places for this currency
+          example: 2
+        is_active:
+          type: boolean
+          description: Whether this currency is active
+          example: true
+
+    # ==================== COMMON SCHEMAS ====================
+    PaginationMetadata:
+      type: object
+      required:
+        - limit
+        - offset
+        - total
+      properties:
+        limit:
+          type: integer
+          description: Number of items per page
+          example: 50
+        offset:
+          type: integer
+          description: Number of items skipped
+          example: 0
+        total:
+          type: integer
+          description: Total number of items available
+          example: 150
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Error code
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              description: Human-readable error message
+              example: "Invalid transaction amount"
+            details:
+              type: object
+              description: Additional error details
+              properties:
+                field:
+                  type: string
+                  example: "amount"
+                reason:
+                  type: string
+                  example: "must be positive"
+
+  responses:
+    BadRequest:
+      description: Bad Request - Malformed request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "BAD_REQUEST"
+              message: "Malformed JSON in request body"
+
+    NotFound:
+      description: Not Found - Resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "NOT_FOUND"
+              message: "Transaction with ID 999 not found"
+
+    ValidationError:
+      description: Unprocessable Entity - Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Invalid foreign key reference"
+              details:
+                field: "account_id"
+                reason: "account with ID 999 does not exist"
+
+    InternalError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "INTERNAL_ERROR"
+              message: "An unexpected error occurred"

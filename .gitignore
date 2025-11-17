@@ -65,6 +65,7 @@ coverage.xml
 *.bak
 *.orig
 
-# Project specific
-specs/
-.specify/
+# Project specific 
+## (this project acts as a sample of using speckit)
+# specs/
+# .specify/
