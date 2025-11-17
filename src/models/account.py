@@ -49,4 +49,8 @@ class Account(Base):
     # Relationships
     account_type: Mapped["AccountType"] = relationship("AccountType")
     currency: Mapped["Currency"] = relationship("Currency")
-    transactions: Mapped[List["Transaction"]] = relationship("Transaction", back_populates="account")
+    transactions: Mapped[List["Transaction"]] = relationship(
+        "Transaction",
+        foreign_keys="[Transaction.account_id]",
+        back_populates="account"
+    )

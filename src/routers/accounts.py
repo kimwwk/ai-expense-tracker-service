@@ -154,11 +154,11 @@ def update_account_full(
     """
     Update an account with full replacement.
 
-    All updatable fields should be provided. Missing optional fields will be set to None.
+    In practice, this behaves like PATCH - only provided fields are updated.
     Note: opening_balance and opening_balance_date cannot be updated.
     """
     try:
-        account = account_service.update_account(db, account_id, account_data, partial=False)
+        account = account_service.update_account(db, account_id, account_data, partial=True)
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

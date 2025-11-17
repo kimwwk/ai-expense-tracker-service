@@ -10,33 +10,35 @@ from sqlalchemy.orm import sessionmaker, Session
 from src.main import app
 from src.database import Base, get_db
 
-# Test database URL - use a separate test database
-TEST_DATABASE_URL = "postgresql://user:password@localhost:5432/expense_tracker_test"
+# Test database URL - use the same database as dev for now
+# In production, you should use a separate test database
+TEST_DATABASE_URL = "postgresql://expense_user:expense_tracker_password@localhost:5432/expense_tracker_db"
 
 
 @pytest.fixture(scope="function")
 def db_session() -> Session:
     """
     Provides an isolated database session for each test.
-    Creates tables before test, rolls back changes after test.
+    Uses transactions and rolls back changes after each test to maintain isolation.
     """
     # Create test engine
     engine = create_engine(TEST_DATABASE_URL)
 
-    # Create all tables
-    Base.metadata.create_all(bind=engine)
+    # Create connection and transaction
+    connection = engine.connect()
+    transaction = connection.begin()
 
     # Create session
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=connection)
     session = TestingSessionLocal()
 
     try:
         yield session
     finally:
-        session.rollback()
         session.close()
-        # Drop all tables after test
-        Base.metadata.drop_all(bind=engine)
+        # Rollback the transaction to undo all changes
+        transaction.rollback()
+        connection.close()
 
 
 @pytest.fixture
