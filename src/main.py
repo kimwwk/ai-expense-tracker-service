@@ -41,6 +41,7 @@ def health_check():
 
 
 # Routers
-from src.routers import accounts
+from src.routers import accounts, reference
 
 app.include_router(accounts.router)
+app.include_router(reference.router)
