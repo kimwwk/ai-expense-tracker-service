@@ -153,12 +153,12 @@
 
 ### Implementation for User Story 3
 
-- [ ] T048 [US3] Implement list_transactions function in src/services/transaction_service.py with filtering (account_id, category_id, payee_id, transaction_type, status, start_date, end_date) and pagination
-- [ ] T049 [US3] Implement GET /transactions list endpoint in src/routers/transactions.py with all filter parameters
-- [ ] T050 [US3] Add sorting support (sort, order parameters) to list endpoint
-- [ ] T051 [US3] Implement pagination validation (limit max 100, default 50, offset default 0)
-- [ ] T052 [P] [US3] Write unit tests for list and filter logic in tests/unit/test_transaction_service.py
-- [ ] T053 [US3] Write integration tests for list, filter, pagination, sorting in tests/integration/test_transactions_api.py
+- [X] T048 [US3] Implement list_transactions function in src/services/transaction_service.py with filtering (account_id, category_id, payee_id, transaction_type, status, start_date, end_date) and pagination
+- [X] T049 [US3] Implement GET /transactions list endpoint in src/routers/transactions.py with all filter parameters
+- [X] T050 [US3] Add sorting support (sort, order parameters) to list endpoint
+- [X] T051 [US3] Implement pagination validation (limit max 100, default 50, offset default 0)
+- [X] T052 [P] [US3] Write unit tests for list and filter logic in tests/unit/test_transaction_service.py
+- [X] T053 [US3] Write integration tests for list, filter, pagination, sorting in tests/integration/test_transactions_api.py
 
 **Checkpoint**: Transactions can be listed with pagination, filtered by multiple criteria, and sorted. Users can analyze spending patterns.
 
@@ -174,17 +174,17 @@
 
 ### Implementation for User Story 5
 
-- [ ] T054 [P] [US5] Complete Category schemas in src/schemas/category.py (CategoryCreate, CategoryUpdate, CategoryResponse)
-- [ ] T055 [P] [US5] Complete Payee schemas in src/schemas/payee.py (PayeeCreate, PayeeUpdate, PayeeResponse)
-- [ ] T056 [P] [US5] Implement category service in src/services/category_service.py (create, get, list with filters, update, delete)
-- [ ] T057 [P] [US5] Implement payee service in src/services/payee_service.py (create, get, list with filters, update, delete)
-- [ ] T058 [P] [US5] Implement category router in src/routers/categories.py (POST, GET/{id}, GET list, PUT, PATCH, DELETE)
-- [ ] T059 [P] [US5] Implement payee router in src/routers/payees.py (POST, GET/{id}, GET list, PUT, PATCH, DELETE)
-- [ ] T060 [P] [US5] Register categories and payees routers in src/main.py
+- [X] T054 [P] [US5] Complete Category schemas in src/schemas/category.py (CategoryCreate, CategoryUpdate, CategoryResponse)
+- [X] T055 [P] [US5] Complete Payee schemas in src/schemas/payee.py (PayeeCreate, PayeeUpdate, PayeeResponse)
+- [X] T056 [P] [US5] Implement category service in src/services/category_service.py (create, get, list with filters, update, delete)
+- [X] T057 [P] [US5] Implement payee service in src/services/payee_service.py (create, get, list with filters, update, delete)
+- [X] T058 [P] [US5] Implement category router in src/routers/categories.py (POST, GET/{id}, GET list, PUT, PATCH, DELETE)
+- [X] T059 [P] [US5] Implement payee router in src/routers/payees.py (POST, GET/{id}, GET list, PUT, PATCH, DELETE)
+- [X] T060 [P] [US5] Register categories and payees routers in src/main.py
 - [ ] T061 [P] [US5] Write unit tests for category service in tests/unit/test_category_service.py
 - [ ] T062 [P] [US5] Write unit tests for payee service in tests/unit/test_payee_service.py
-- [ ] T063 [P] [US5] Write integration tests for categories API in tests/integration/test_categories_api.py
-- [ ] T064 [P] [US5] Write integration tests for payees API in tests/integration/test_payees_api.py
+- [X] T063 [P] [US5] Write integration tests for categories API in tests/integration/test_categories_api.py
+- [X] T064 [P] [US5] Write integration tests for payees API in tests/integration/test_payees_api.py
 
 **Checkpoint**: Categories and payees can be fully managed. Transactions can reference them for better organization and reporting.
 
