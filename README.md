@@ -60,19 +60,54 @@ REST API for expense tracking with CRUD operations for transactions, accounts, c
 
 ## Running the API
 
-**Development server**:
+### Start the Server
+
+**Development server (default port 8000)**:
 ```bash
-uvicorn src.main:app --reload
+.venv/bin/uvicorn src.main:app --reload
+```
+
+**Development server (custom port)**:
+```bash
+.venv/bin/uvicorn src.main:app --reload --host 0.0.0.0 --port 8001
+```
+
+**Run in background**:
+```bash
+# Start and save PID
+.venv/bin/uvicorn src.main:app --reload --host 0.0.0.0 --port 8001 & echo $! > .uvicorn.pid
 ```
 
 The API will be available at:
-- API: http://localhost:8000
+- API: http://localhost:8000 (or your custom port)
 - Interactive API docs (Swagger): http://localhost:8000/docs
 - Alternative API docs (ReDoc): http://localhost:8000/redoc
 
 **Health check**:
 ```bash
 curl http://localhost:8000/health
+```
+
+### Stop the Server
+
+**If running in foreground**:
+- Press `Ctrl+C` in the terminal
+
+**If running in background**:
+```bash
+# Using saved PID file
+kill $(cat .uvicorn.pid) && rm .uvicorn.pid
+
+# Or find and kill by process name
+pkill -f "uvicorn src.main:app"
+
+# Force kill if needed
+pkill -9 -f "uvicorn src.main:app"
+```
+
+**Find running server**:
+```bash
+ps aux | grep uvicorn
 ```
 
 ## API Documentation
