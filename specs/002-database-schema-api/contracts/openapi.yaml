@@ -1,0 +1,527 @@
+openapi: 3.1.0
+info:
+  title: Database Schema Discovery API
+  description: |
+    REST API endpoints for discovering database schema information including tables,
+    columns, constraints, relationships, and reference data. This API enables developers
+    and AI agents to programmatically understand the database structure without consulting
+    external documentation.
+  version: 1.0.0
+  contact:
+    name: AI Expense Tracker Team
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server (placeholder)
+
+tags:
+  - name: schema
+    description: Database schema discovery operations
+
+paths:
+  /schema:
+    get:
+      tags:
+        - schema
+      summary: Get complete database schema
+      description: |
+        Retrieves the complete database schema including all tables, their columns,
+        constraints, and foreign key relationships. This endpoint provides a comprehensive
+        view of the database structure in a single request.
+
+        **Use Cases**:
+        - Initial database discovery
+        - Automated documentation generation
+        - Schema validation tools
+        - AI agent context initialization
+
+        **Performance**: Typically completes in <2 seconds for databases with up to 50 tables.
+      operationId: getDatabaseSchema
+      responses:
+        '200':
+          description: Complete database schema successfully retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseSchema'
+              example:
+                tables:
+                  - name: accounts
+                    type: BASE TABLE
+                    columns:
+                      - column_name: account_id
+                        data_type: integer
+                        is_nullable: "NO"
+                        column_default: nextval('accounts_account_id_seq'::regclass)
+                        character_maximum_length: null
+                        numeric_precision: 32
+                        numeric_scale: 0
+                      - column_name: account_name
+                        data_type: character varying
+                        is_nullable: "NO"
+                        column_default: null
+                        character_maximum_length: 255
+                        numeric_precision: null
+                        numeric_scale: null
+                    constraints:
+                      - constraint_name: accounts_pkey
+                        constraint_type: PRIMARY KEY
+                        column_name: account_id
+                        foreign_table_name: null
+                        foreign_column_name: null
+                relationships:
+                  - from_table: transactions
+                    from_column: account_id
+                    to_table: accounts
+                    to_column: account_id
+                    constraint_name: transactions_account_id_fkey
+        '500':
+          description: Database connection or query execution error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: DATABASE_ERROR
+                  message: Failed to retrieve database schema
+                  details:
+                    reason: Connection timeout
+
+  /schema/tables/{table_name}:
+    get:
+      tags:
+        - schema
+      summary: Get schema for specific table
+      description: |
+        Retrieves detailed schema information for a single table including all columns,
+        their data types, constraints, and foreign key relationships.
+
+        **Use Cases**:
+        - Focused table inspection
+        - Query construction for specific table
+        - Field validation before insert/update
+
+        **Performance**: Typically completes in <200ms.
+      operationId: getTableSchema
+      parameters:
+        - name: table_name
+          in: path
+          required: true
+          description: Name of the table to retrieve schema for (case-sensitive)
+          schema:
+            type: string
+            example: accounts
+      responses:
+        '200':
+          description: Table schema successfully retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableSchema'
+              example:
+                name: accounts
+                type: BASE TABLE
+                columns:
+                  - column_name: account_id
+                    data_type: integer
+                    is_nullable: "NO"
+                    column_default: nextval('accounts_account_id_seq'::regclass)
+                    character_maximum_length: null
+                    numeric_precision: 32
+                    numeric_scale: 0
+                constraints:
+                  - constraint_name: accounts_pkey
+                    constraint_type: PRIMARY KEY
+                    column_name: account_id
+                    foreign_table_name: null
+                    foreign_column_name: null
+        '404':
+          description: Table not found in public schema
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: "Table 'nonexistent' not found in public schema"
+                  details:
+                    table_name: nonexistent
+                    schema: public
+        '500':
+          description: Database connection or query execution error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /schema/relationships:
+    get:
+      tags:
+        - schema
+      summary: Get all foreign key relationships
+      description: |
+        Retrieves all foreign key relationships across the database. This provides a
+        comprehensive view of how tables are connected through referential constraints.
+
+        **Use Cases**:
+        - Understanding table dependencies
+        - Constructing JOIN queries
+        - Data integrity validation
+        - ERD generation
+
+        **Performance**: Typically completes in <200ms.
+      operationId: getTableRelationships
+      responses:
+        '200':
+          description: Foreign key relationships successfully retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TableRelationship'
+              example:
+                - from_table: transactions
+                  from_column: account_id
+                  to_table: accounts
+                  to_column: account_id
+                  constraint_name: transactions_account_id_fkey
+                - from_table: transactions
+                  from_column: category_id
+                  to_table: categories
+                  to_column: category_id
+                  constraint_name: transactions_category_id_fkey
+        '500':
+          description: Database connection or query execution error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /schema/reference-data:
+    get:
+      tags:
+        - schema
+      summary: Get reference data values
+      description: |
+        Retrieves actual data values from reference/lookup tables (currencies, account types,
+        categories). This is useful for populating dropdowns, validating input, and
+        understanding available options.
+
+        **Use Cases**:
+        - Form field population (dropdowns, autocomplete)
+        - Input validation
+        - Business rules discovery
+
+        **Performance**: Typically completes in <500ms for all reference data combined.
+      operationId: getReferenceData
+      parameters:
+        - name: type
+          in: query
+          required: true
+          description: Type of reference data to retrieve
+          schema:
+            type: string
+            enum:
+              - currencies
+              - account_types
+              - categories
+              - all
+            example: currencies
+      responses:
+        '200':
+          description: Reference data successfully retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferenceDataResponse'
+              examples:
+                currencies:
+                  summary: Currency reference data
+                  value:
+                    data_type: currencies
+                    data:
+                      - currency_code: USD
+                        currency_name: US Dollar
+                        currency_symbol: $
+                        decimal_places: 2
+                        is_active: true
+                      - currency_code: EUR
+                        currency_name: Euro
+                        currency_symbol: €
+                        decimal_places: 2
+                        is_active: true
+                all:
+                  summary: All reference data types
+                  value:
+                    data_type: all
+                    data:
+                      currencies:
+                        - currency_code: USD
+                          currency_name: US Dollar
+                          currency_symbol: $
+                          decimal_places: 2
+                          is_active: true
+                      account_types:
+                        - account_type_id: 1
+                          type_name: Checking
+                          description: Standard checking account
+                          is_asset: true
+                      categories:
+                        - category_id: 1
+                          category_name: Groceries
+                          category_group: Food
+                          category_type: Expense
+                          color_code: "#4CAF50"
+                          icon_name: shopping_cart
+                          is_active: true
+        '422':
+          description: Invalid reference data type requested
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: INVALID_PARAMETER
+                  message: Invalid reference data type 'invalid_type'
+                  details:
+                    parameter: type
+                    provided_value: invalid_type
+                    valid_values:
+                      - currencies
+                      - account_types
+                      - categories
+                      - all
+        '500':
+          description: Database connection or query execution error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    DatabaseSchema:
+      type: object
+      description: Complete database schema including all tables and relationships
+      required:
+        - tables
+        - relationships
+      properties:
+        tables:
+          type: array
+          description: List of all tables in the public schema
+          items:
+            $ref: '#/components/schemas/TableSchema'
+        relationships:
+          type: array
+          description: List of all foreign key relationships
+          items:
+            $ref: '#/components/schemas/TableRelationship'
+
+    TableSchema:
+      type: object
+      description: Complete schema information for a single table
+      required:
+        - name
+        - type
+        - columns
+        - constraints
+      properties:
+        name:
+          type: string
+          description: Table name
+          example: accounts
+        type:
+          type: string
+          description: Table type from information_schema
+          example: BASE TABLE
+        columns:
+          type: array
+          description: List of all columns in ordinal position order
+          items:
+            $ref: '#/components/schemas/ColumnDefinition'
+        constraints:
+          type: array
+          description: List of all constraints defined on the table
+          items:
+            $ref: '#/components/schemas/ConstraintDefinition'
+
+    ColumnDefinition:
+      type: object
+      description: Column metadata from information_schema
+      required:
+        - column_name
+        - data_type
+        - is_nullable
+      properties:
+        column_name:
+          type: string
+          description: Name of the column
+          example: account_id
+        data_type:
+          type: string
+          description: PostgreSQL data type
+          example: integer
+        is_nullable:
+          type: string
+          description: Whether column accepts NULL values
+          enum:
+            - "YES"
+            - "NO"
+          example: "NO"
+        column_default:
+          type: string
+          nullable: true
+          description: Default value expression
+          example: nextval('accounts_account_id_seq'::regclass)
+        character_maximum_length:
+          type: integer
+          nullable: true
+          description: Maximum length for character types
+          example: 255
+        numeric_precision:
+          type: integer
+          nullable: true
+          description: Total digits for numeric types
+          example: 32
+        numeric_scale:
+          type: integer
+          nullable: true
+          description: Decimal places for numeric types
+          example: 0
+
+    ConstraintDefinition:
+      type: object
+      description: Table constraint metadata
+      required:
+        - constraint_name
+        - constraint_type
+      properties:
+        constraint_name:
+          type: string
+          description: Name of the constraint
+          example: accounts_pkey
+        constraint_type:
+          type: string
+          description: Type of constraint
+          enum:
+            - PRIMARY KEY
+            - FOREIGN KEY
+            - UNIQUE
+            - CHECK
+          example: PRIMARY KEY
+        column_name:
+          type: string
+          nullable: true
+          description: Column affected by constraint
+          example: account_id
+        foreign_table_name:
+          type: string
+          nullable: true
+          description: Referenced table for foreign keys
+          example: accounts
+        foreign_column_name:
+          type: string
+          nullable: true
+          description: Referenced column for foreign keys
+          example: account_id
+
+    TableRelationship:
+      type: object
+      description: Foreign key relationship between tables
+      required:
+        - from_table
+        - from_column
+        - to_table
+        - to_column
+        - constraint_name
+      properties:
+        from_table:
+          type: string
+          description: Source table containing foreign key
+          example: transactions
+        from_column:
+          type: string
+          description: Column in source table
+          example: account_id
+        to_table:
+          type: string
+          description: Target table being referenced
+          example: accounts
+        to_column:
+          type: string
+          description: Column in target table
+          example: account_id
+        constraint_name:
+          type: string
+          description: Name of the foreign key constraint
+          example: transactions_account_id_fkey
+
+    ReferenceDataResponse:
+      type: object
+      description: Response wrapper for reference data queries
+      required:
+        - data_type
+        - data
+      properties:
+        data_type:
+          type: string
+          description: Type of reference data returned
+          enum:
+            - currencies
+            - account_types
+            - categories
+            - all
+          example: currencies
+        data:
+          oneOf:
+            - type: array
+              description: List of records for single type query
+              items:
+                type: object
+                additionalProperties: true
+            - type: object
+              description: Dictionary of lists for 'all' type query
+              additionalProperties:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+
+    ErrorResponse:
+      type: object
+      description: Standard error response format
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code
+              enum:
+                - NOT_FOUND
+                - INVALID_PARAMETER
+                - DATABASE_ERROR
+              example: NOT_FOUND
+            message:
+              type: string
+              description: Human-readable error message
+              example: "Table 'accounts' not found in public schema"
+            details:
+              type: object
+              description: Additional context about the error
+              additionalProperties: true
+              example:
+                table_name: accounts
+                schema: public

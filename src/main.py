@@ -41,10 +41,11 @@ def health_check():
 
 
 # Routers
-from src.routers import accounts, reference, transactions, categories, payees
+from src.routers import accounts, reference, transactions, categories, payees, schema
 
 app.include_router(accounts.router)
 app.include_router(reference.router)
 app.include_router(transactions.router)
 app.include_router(categories.router)
 app.include_router(payees.router)
+app.include_router(schema.router)
