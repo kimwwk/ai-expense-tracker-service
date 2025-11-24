@@ -1,0 +1,116 @@
+openapi: 3.1.0
+info:
+  title: Table Names List Endpoint
+  description: Lightweight endpoint for retrieving all table names from the public schema
+  version: 1.0.0
+  contact:
+    name: AI Expense Tracker API
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+
+paths:
+  /schema/tables:
+    get:
+      tags:
+        - schema
+      summary: Get all table names
+      description: |
+        Retrieve a simple list of all table names from the public schema.
+
+        This is a lightweight alternative to the full schema endpoint (`GET /schema`)
+        for cases where you only need to know what tables exist without fetching
+        complete schema metadata.
+
+        **Features:**
+        - Returns only BASE TABLE types (excludes views)
+        - Filters to public schema only (no system tables)
+        - Results are alphabetically sorted
+        - Returns empty array if no tables exist
+
+        **Performance:**
+        - Target response time: <100ms
+        - Simple query with minimal overhead
+
+      operationId: getTableNames
+
+      responses:
+        '200':
+          description: List of table names retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  description: Name of a table in the public schema
+                minItems: 0
+                example:
+                  - "account_types"
+                  - "accounts"
+                  - "categories"
+                  - "currencies"
+                  - "payees"
+                  - "transactions"
+                  - "transaction_splits"
+                  - "users"
+              examples:
+                typical:
+                  summary: Typical response with 8 tables
+                  value:
+                    - "account_types"
+                    - "accounts"
+                    - "categories"
+                    - "currencies"
+                    - "payees"
+                    - "transactions"
+                    - "transaction_splits"
+                    - "users"
+                empty:
+                  summary: Empty schema (no tables)
+                  value: []
+
+        '500':
+          description: Database error or internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                database_error:
+                  summary: Database connection failure
+                  value:
+                    error:
+                      code: "DATABASE_ERROR"
+                      message: "Failed to retrieve table names"
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Error code identifying the type of error
+              example: "DATABASE_ERROR"
+            message:
+              type: string
+              description: Human-readable error message
+              example: "Failed to retrieve table names"
+            details:
+              type: object
+              description: Optional additional error details
+              additionalProperties: true
+
+tags:
+  - name: schema
+    description: Database schema discovery and exploration endpoints
