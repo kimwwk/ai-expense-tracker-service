@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from src.database import get_db
 from src.services import transaction_service
-from src.schemas.transaction import TransactionCreate, TransactionResponse
+from src.schemas.transaction import TransactionCreate, TransactionUpdate, TransactionResponse
 from src.schemas.common import PaginatedResponse, PaginationMetadata
 from src.schemas.enums import TransactionType, TransactionStatus
 
@@ -190,3 +190,153 @@ def get_transaction(
             }
         )
     return transaction
+
+
+@router.delete(
+    "/{transaction_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a transaction"
+)
+def delete_transaction(
+    transaction_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a transaction by its ID.
+
+    The account balance is automatically updated by database triggers.
+    Returns 204 No Content on success.
+    """
+    deleted = transaction_service.delete_transaction(db, transaction_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": f"Transaction with ID {transaction_id} not found"
+                }
+            }
+        )
+
+
+@router.put(
+    "/{transaction_id}",
+    response_model=TransactionResponse,
+    summary="Update a transaction (full update)"
+)
+def update_transaction_full(
+    transaction_id: int,
+    transaction_data: TransactionUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Update a transaction with full replacement (PUT).
+
+    All fields in the request will be updated. Fields not provided will be set to None.
+    Use PATCH for partial updates instead.
+
+    The account balance is automatically updated by database triggers.
+    """
+    try:
+        transaction = transaction_service.update_transaction(
+            db, transaction_id, transaction_data, partial=False
+        )
+        if not transaction:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "NOT_FOUND",
+                        "message": f"Transaction with ID {transaction_id} not found"
+                    }
+                }
+            )
+        return transaction
+    except IntegrityError as e:
+        db.rollback()
+        # Check for foreign key violation
+        if "foreign key" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Invalid foreign key reference",
+                        "details": {
+                            "reason": "account_id, category_id, payee_id, or currency_code does not exist"
+                        }
+                    }
+                }
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "BAD_REQUEST",
+                    "message": "Failed to update transaction",
+                    "details": {"reason": str(e)}
+                }
+            }
+        )
+
+
+@router.patch(
+    "/{transaction_id}",
+    response_model=TransactionResponse,
+    summary="Update a transaction (partial update)"
+)
+def update_transaction_partial(
+    transaction_id: int,
+    transaction_data: TransactionUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Update a transaction with partial update (PATCH).
+
+    Only fields provided in the request will be updated. Other fields remain unchanged.
+    This is the recommended way to update transactions.
+
+    The account balance is automatically updated by database triggers.
+    """
+    try:
+        transaction = transaction_service.update_transaction(
+            db, transaction_id, transaction_data, partial=True
+        )
+        if not transaction:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "NOT_FOUND",
+                        "message": f"Transaction with ID {transaction_id} not found"
+                    }
+                }
+            )
+        return transaction
+    except IntegrityError as e:
+        db.rollback()
+        # Check for foreign key violation
+        if "foreign key" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Invalid foreign key reference",
+                        "details": {
+                            "reason": "account_id, category_id, payee_id, or currency_code does not exist"
+                        }
+                    }
+                }
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "BAD_REQUEST",
+                    "message": "Failed to update transaction",
+                    "details": {"reason": str(e)}
+                }
+            }
+        )
