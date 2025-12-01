@@ -10,11 +10,11 @@ from pydantic import BaseModel, Field, ConfigDict
 class TransactionCreate(BaseModel):
     """
     Request schema for creating a new transaction.
-    Only supports 'income' and 'expense' types. Transfer transactions are OUT OF SCOPE.
+    Supports 'income', 'expense', and 'transfer' transaction types.
     """
     # Required fields
     account_id: int
-    transaction_type: Literal["income", "expense"]  # NOTE: 'transfer' is OUT OF SCOPE
+    transaction_type: Literal["income", "expense", "transfer"]
     amount: Decimal = Field(gt=0, max_digits=15, decimal_places=2)
     currency_code: str = Field(pattern=r"^[A-Z]{3}$")
     base_amount: Decimal = Field(gt=0, max_digits=15, decimal_places=2)
@@ -29,6 +29,7 @@ class TransactionCreate(BaseModel):
     category_id: Optional[int] = None
     description: Optional[str] = Field(None, max_length=255)
     reference_number: Optional[str] = Field(None, max_length=50)
+    transfer_account_id: Optional[int] = None  # Required for transfer transactions
     location: Optional[str] = Field(None, max_length=255)
     notes: Optional[str] = None
 
@@ -39,7 +40,7 @@ class TransactionUpdate(BaseModel):
     All fields are optional to support partial updates (PATCH).
     """
     account_id: Optional[int] = None
-    transaction_type: Optional[Literal["income", "expense"]] = None
+    transaction_type: Optional[Literal["income", "expense", "transfer"]] = None
     amount: Optional[Decimal] = Field(None, gt=0, max_digits=15, decimal_places=2)
     currency_code: Optional[str] = Field(None, pattern=r"^[A-Z]{3}$")
     base_amount: Optional[Decimal] = Field(None, gt=0, max_digits=15, decimal_places=2)
@@ -50,6 +51,7 @@ class TransactionUpdate(BaseModel):
     category_id: Optional[int] = None
     description: Optional[str] = Field(None, max_length=255)
     reference_number: Optional[str] = Field(None, max_length=50)
+    transfer_account_id: Optional[int] = None
     location: Optional[str] = Field(None, max_length=255)
     notes: Optional[str] = None
 

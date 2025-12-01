@@ -26,10 +26,16 @@ def create_transaction(db: Session, transaction_data: TransactionCreate) -> Tran
 
     Raises:
         IntegrityError: If foreign key constraints are violated
+        ValueError: If transfer transaction is missing transfer_account_id
 
     Note:
         Account balance is automatically updated by database trigger.
+        Transfer transactions require transfer_account_id to be set.
     """
+    # Validate transfer transactions have transfer_account_id
+    if transaction_data.transaction_type == "transfer" and not transaction_data.transfer_account_id:
+        raise ValueError("Transfer transactions must have transfer_account_id")
+
     transaction = Transaction(**transaction_data.model_dump(exclude_unset=True))
     db.add(transaction)
     db.commit()

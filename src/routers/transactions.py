@@ -112,12 +112,10 @@ def create_transaction(
     db: Session = Depends(get_db)
 ):
     """
-    Create a new financial transaction (income or expense).
-
-    **Note**: Transfer transactions are OUT OF SCOPE for this API.
+    Create a new financial transaction (income, expense, or transfer).
 
     - **account_id**: Account for this transaction
-    - **transaction_type**: Type of transaction ('income' or 'expense')
+    - **transaction_type**: Type of transaction ('income', 'expense', or 'transfer')
     - **amount**: Transaction amount (must be positive)
     - **currency_code**: 3-letter ISO currency code
     - **base_amount**: Amount in base currency (for multi-currency support)
@@ -128,6 +126,7 @@ def create_transaction(
     - **category_id**: Optional category reference
     - **description**: Optional description
     - **reference_number**: Optional reference/check number
+    - **transfer_account_id**: Required for transfer transactions - target account ID
     - **location**: Optional location
     - **notes**: Optional additional notes
 
@@ -136,6 +135,19 @@ def create_transaction(
     try:
         transaction = transaction_service.create_transaction(db, transaction_data)
         return transaction
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": str(e),
+                    "details": {
+                        "reason": "Transfer transactions require transfer_account_id"
+                    }
+                }
+            }
+        )
     except IntegrityError as e:
         db.rollback()
         # Check for foreign key violation
@@ -147,7 +159,7 @@ def create_transaction(
                         "code": "VALIDATION_ERROR",
                         "message": "Invalid foreign key reference",
                         "details": {
-                            "reason": "account_id, category_id, payee_id, or currency_code does not exist"
+                            "reason": "account_id, category_id, payee_id, transfer_account_id, or currency_code does not exist"
                         }
                     }
                 }
